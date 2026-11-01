@@ -1,0 +1,354 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>FINLAY'S WORLD</title>
+<style>
+*{box-sizing:border-box;touch-action:manipulation}
+body{margin:0;overflow:hidden;background:#17242b;color:white;font-family:Arial}
+canvas{display:block;width:100vw;height:100dvh}
+button{border:0;border-radius:13px;padding:13px;background:#1679ce;color:white;font-weight:bold;font-size:14px}
+#hud{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none}
+#hud div{background:#101c27eF;padding:11px;border-radius:12px;font-weight:bold}
+#inventory{position:fixed;top:65px;left:12px}
+#joystick{position:fixed;bottom:22px;left:22px;width:145px;height:145px;border-radius:50%;background:#ffffff38;border:3px solid #ffffff90;touch-action:none}
+#stick{position:absolute;width:55px;height:55px;border-radius:50%;background:#ffffffdd;left:42px;top:42px;pointer-events:none}
+#buttons{position:fixed;right:15px;bottom:20px;display:grid;grid-template-columns:repeat(2,85px);gap:10px}
+#buttons button{height:57px;background:#152c43eF}
+#phone,#invPanel{display:none;position:fixed;inset:0;background:#000b;align-items:center;justify-content:center;padding:12px}
+.panel{background:#172331;border:2px solid #52677d;border-radius:22px;padding:18px;width:min(370px,95vw);max-height:90dvh;overflow:auto}
+.phone{background:#0d1520;border:5px solid #65778b;border-radius:32px;width:min(340px,94vw);padding:18px;max-height:90dvh;overflow:auto}
+.chat{background:#17283b;padding:10px;border-radius:12px;margin:8px 0;max-height:180px;overflow:auto}
+.msg{padding:9px;background:#263d54;border-radius:12px;margin:7px 0;font-size:14px}
+.mine{background:#176bc2;margin-left:25px;text-align:right}
+.score{text-align:center;background:#102c4b;padding:13px;border-radius:15px;margin:12px 0}
+.score strong{font-size:34px;display:block}
+#send{width:100%;padding:16px;font-size:17px}
+.close{background:#536273;width:100%;margin-top:10px}
+.items{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.item{background:#26394d;padding:13px;border-radius:12px;text-align:center}
+#toast{position:fixed;top:115px;left:50%;transform:translateX(-50%);background:#172c43;padding:12px 20px;border-radius:12px;display:none;z-index:10;white-space:nowrap}
+#hint{position:fixed;top:110px;left:12px;background:#102030bb;padding:8px;border-radius:9px;font-size:11px;pointer-events:none}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+ <div>🌍 FINLAY'S WORLD</div>
+ <div>⭐ <span id="stars">0</span> 💰 <span id="coins">0</span></div>
+</div>
+
+<button id="inventory" onclick="openInventory()">🎒 INVENTORY</button>
+<div id="hint">EXPLORE THE CITY • USE THE JOYSTICK</div>
+
+<div id="joystick"><div id="stick"></div></div>
+
+<div id="buttons">
+ <button id="run">🏃 RUN</button>
+ <button onclick="openInventory()">🎒 BAG</button>
+ <button onclick="openPhone()">📱 PHONE</button>
+ <button onclick="toast('Football mode selected! ⚽')">⚽ KICK</button>
+</div>
+
+<div id="toast"></div>
+
+<div id="invPanel">
+ <div class="panel">
+  <h2>🎒 FINLAY'S INVENTORY</h2>
+  <div class="items">
+   <div class="item">📱<br>PHONE<br><button onclick="openPhone()">USE</button></div>
+   <div class="item">⚽<br>FOOTBALL<br><button onclick="toast('Football selected!')">SELECT</button></div>
+   <div class="item">🏆<br>TROPHIES<br><button onclick="toast('Stars: '+stars)">VIEW</button></div>
+   <div class="item">🎮<br>CONTROLLER<br><button onclick="toast('Controller selected!')">SELECT</button></div>
+  </div>
+  <button class="close" onclick="closePanels()">CLOSE</button>
+ </div>
+</div>
+
+<div id="phone">
+ <div class="phone">
+  <div style="text-align:center">
+   <div style="font-size:26px">📱 FINLAY'S PHONE</div>
+   <small>12:45 • ONLINE</small>
+  </div>
+  <div id="home">
+   <h2>Welcome, Finlay!</h2>
+   <button style="width:100%;padding:18px" onclick="showMessages()">💬 MESSAGES</button>
+   <button class="close" onclick="closePanels()">LOCK PHONE</button>
+  </div>
+  <div id="messages" style="display:none">
+   <h3>💬 FINLAY & THE BOYS</h3>
+   <small>Arian • Teddy • Ashton • Keilan • Frankie</small>
+   <div class="chat" id="chat">
+    <div class="msg">Arian: Anyone online? 😂</div>
+    <div class="msg">Teddy: FINLAY WHERE ARE YOU?</div>
+    <div class="msg">Ashton: Let's play! 🎮</div>
+    <div class="msg">Keilan: Who's winning? 💀</div>
+    <div class="msg">Frankie: Get onlineeee!</div>
+   </div>
+   <div class="score">
+    MESSAGING SCORE
+    <strong id="score">0</strong>
+    <div id="rank">Earn stars by sending messages!</div>
+    <div id="progress">Next star: 10 messages</div>
+   </div>
+   <button id="send" onclick="sendMessage()">📨 SEND MESSAGE</button>
+   <button class="close" onclick="showHome()">BACK</button>
+  </div>
+ </div>
+</div>
+
+<script>
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+let W,H;
+let player={x:450,y:450};
+let camera={x:0,y:0};
+let joy={x:0,y:0};
+let running=false;
+let stars=0,coins=0,score=0;
+let keys={};
+
+function resize(){
+ let d=devicePixelRatio||1;
+ canvas.width=innerWidth*d;
+ canvas.height=innerHeight*d;
+ W=innerWidth;H=innerHeight;
+}
+addEventListener('resize',resize);resize();
+
+const buildings=[
+{x:150,y:120,w:180,h:130,c:'#92999d',name:'GAMING SHOP'},
+{x:500,y:100,w:200,h:140,c:'#aaa49b',name:'ARCADE'},
+{x:850,y:130,w:230,h:160,c:'#8e9ca3',name:'HOUSE'},
+{x:1200,y:100,w:180,h:140,c:'#a8a59a',name:'CAR DEALER'},
+{x:150,y:700,w:190,h:150,c:'#7b8990',name:'FOOTBALL SHOP'},
+{x:1100,y:700,w:220,h:160,c:'#9b9b94',name:'GYM'}
+];
+
+function drawWorld(){
+ ctx.fillStyle='#7da36d';
+ ctx.fillRect(-3000,-3000,6000,6000);
+
+ // City roads
+ ctx.fillStyle='#42494c';
+ ctx.fillRect(-3000,420,6000,150);
+ ctx.fillRect(700,-3000,150,6000);
+ ctx.fillStyle='#e7d78b';
+ for(let x=-3000;x<3000;x+=70)ctx.fillRect(x,493,35,4);
+ for(let y=-3000;y<3000;y+=70)ctx.fillRect(772,y,4,35);
+
+ // Football stadium
+ ctx.fillStyle='#303b40';
+ ctx.fillRect(1500,100,650,480);
+ ctx.fillStyle='#32834c';
+ ctx.fillRect(1530,130,590,420);
+ ctx.strokeStyle='white';ctx.lineWidth=4;
+ ctx.strokeRect(1580,180,490,320);
+ ctx.beginPath();ctx.moveTo(1825,180);ctx.lineTo(1825,500);ctx.stroke();
+ ctx.beginPath();ctx.arc(1825,340,65,0,7);ctx.stroke();
+ ctx.strokeRect(1580,270,90,140);
+ ctx.strokeRect(1980,270,90,140);
+ ctx.fillStyle='white';ctx.font='bold 30px Arial';
+ ctx.fillText('FINLAY STADIUM',1640,115);
+
+ // Training pitch
+ for(let i=0;i<6;i++){
+  ctx.fillStyle=i%2?'#369b54':'#3da35a';
+  ctx.fillRect(-250+i*108,1100,108,420);
+ }
+ ctx.strokeStyle='white';ctx.lineWidth=3;
+ ctx.strokeRect(-220,1130,590,360);
+ ctx.beginPath();ctx.arc(75,1310,60,0,7);ctx.stroke();
+ ctx.strokeRect(-220,1240,90,140);
+ ctx.strokeRect(280,1240,90,140);
+ ctx.fillStyle='white';ctx.font='bold 24px Arial';
+ ctx.fillText('TRAINING PITCH',-100,1090);
+
+ // Buildings
+ buildings.forEach(b=>{
+  ctx.fillStyle='#0005';ctx.fillRect(b.x+12,b.y+15,b.w,b.h);
+  ctx.fillStyle=b.c;ctx.fillRect(b.x,b.y,b.w,b.h);
+  ctx.fillStyle='#414c53';ctx.fillRect(b.x+12,b.y+12,b.w-24,24);
+  ctx.fillStyle='#b5d8e9';
+  for(let xx=b.x+20;xx<b.x+b.w-15;xx+=45)ctx.fillRect(xx,b.y+48,24,30);
+  ctx.fillStyle='#554c40';ctx.fillRect(b.x+b.w/2-15,b.y+b.h-48,30,48);
+  ctx.fillStyle='white';ctx.font='bold 16px Arial';
+  ctx.fillText(b.name,b.x,b.y-10);
+ });
+
+ // Trees
+ for(let x=-300;x<2400;x+=180){
+  for(let y=40;y<1800;y+=230){
+   ctx.fillStyle='#60442d';ctx.fillRect(x,y+15,10,25);
+   ctx.fillStyle='#23613c';
+   ctx.beginPath();ctx.arc(x+5,y,24,0,7);ctx.fill();
+  }
+ }
+ ctx.fillStyle='#17232d';ctx.font='bold 22px Arial';
+ ctx.fillText('GAMING DISTRICT',300,380);
+ ctx.fillText('SPORTS PARK',950,950);
+}
+
+function drawPlayer(){
+ ctx.fillStyle='#0005';
+ ctx.beginPath();ctx.ellipse(player.x,player.y+12,14,6,0,0,7);ctx.fill();
+ ctx.fillStyle='#263b68';ctx.fillRect(player.x-10,player.y-7,20,22);
+ ctx.fillStyle='#e5b58b';
+ ctx.beginPath();ctx.arc(player.x,player.y-16,10,0,7);ctx.fill();
+ ctx.fillStyle='#202020';ctx.fillRect(player.x-9,player.y-26,18,6);
+}
+
+function movePlayer(){
+ let dx=joy.x,dy=joy.y;
+ if(keys.ArrowUp||keys.w)dy--;
+ if(keys.ArrowDown||keys.s)dy++;
+ if(keys.ArrowLeft||keys.a)dx--;
+ if(keys.ArrowRight||keys.d)dx++;
+ let len=Math.hypot(dx,dy)||1;
+ let speed=running?5:3;
+ player.x+=dx/len*speed;
+ player.y+=dy/len*speed;
+}
+
+function loop(){
+ let d=devicePixelRatio||1;
+ ctx.setTransform(d,0,0,d,0,0);
+ camera.x=player.x-W/2;
+ camera.y=player.y-H/2;
+ ctx.translate(-camera.x,-camera.y);
+ drawWorld();drawPlayer();
+ movePlayer();
+ requestAnimationFrame(loop);
+}
+loop();
+
+addEventListener('keydown',e=>{
+ keys[e.key]=true;
+ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+});
+addEventListener('keyup',e=>keys[e.key]=false);
+
+// iPad joystick
+const joystick=document.getElementById('joystick');
+const stick=document.getElementById('stick');
+let activePointer=null;
+
+function updateJoy(e){
+ const r=joystick.getBoundingClientRect();
+ let x=e.clientX-(r.left+r.width/2);
+ let y=e.clientY-(r.top+r.height/2);
+ const max=43;
+ let len=Math.hypot(x,y);
+ if(len>max){x=x/len*max;y=y/len*max;}
+ joy.x=x/max;joy.y=y/max;
+ stick.style.left=(42+x)+'px';
+ stick.style.top=(42+y)+'px';
+}
+joystick.addEventListener('pointerdown',e=>{
+ activePointer=e.pointerId;
+ joystick.setPointerCapture(e.pointerId);
+ updateJoy(e);
+});
+joystick.addEventListener('pointermove',e=>{
+ if(e.pointerId===activePointer)updateJoy(e);
+});
+function resetJoy(){
+ activePointer=null;joy.x=0;joy.y=0;
+ stick.style.left='42px';stick.style.top='42px';
+}
+joystick.addEventListener('pointerup',resetJoy);
+joystick.addEventListener('pointercancel',resetJoy);
+
+// Run button
+const runButton=document.getElementById('run');
+runButton.addEventListener('pointerdown',e=>{
+ e.preventDefault();running=true;
+});
+['pointerup','pointerleave','pointercancel'].forEach(event=>
+ runButton.addEventListener(event,()=>running=false)
+);
+
+function toast(message){
+ let el=document.getElementById('toast');
+ el.textContent=message;el.style.display='block';
+ clearTimeout(window.toastTimer);
+ window.toastTimer=setTimeout(()=>el.style.display='none',2000);
+}
+
+function openInventory(){
+ document.getElementById('invPanel').style.display='flex';
+}
+function closePanels(){
+ document.getElementById('invPanel').style.display='none';
+ document.getElementById('phone').style.display='none';
+}
+function openPhone(){
+ document.getElementById('invPanel').style.display='none';
+ document.getElementById('phone').style.display='flex';
+ showHome();
+}
+function showHome(){
+ document.getElementById('home').style.display='block';
+ document.getElementById('messages').style.display='none';
+}
+function showMessages(){
+ document.getElementById('home').style.display='none';
+ document.getElementById('messages').style.display='block';
+}
+
+const names=['Arian','Teddy','Ashton','Keilan','Frankie'];
+const reactions=[
+ '😂😂😂','FINLAY ANSWER!!','BROOOO 💀',
+ 'GET ONLINE!','WHO IS WINNING?','LOL 😂',
+ 'LET’S PLAY 🎮','WHERE ARE YOU?',
+ 'NO WAYYYYY','HAHAHAHA'
+];
+
+function getStars(){
+ let earned=0;
+ if(score>=500)earned=5;
+ else if(score>=250)earned=4;
+ else if(score>=100)earned=3;
+ else if(score>=50)earned=2;
+ else if(score>=10)earned=1;
+
+ if(earned>stars){
+  stars=earned;
+  toast('⭐ NEW STAR UNLOCKED!');
+  document.getElementById('stars').textContent=stars;
+ }
+ let next=[10,50,100,250,500].find(n=>score<n);
+ document.getElementById('rank').textContent=
+ stars===5?'🏆 MESSAGING LEGEND!':'⭐ '+stars+' stars earned!';
+ document.getElementById('progress').textContent=
+ next?'Next star: '+next+' messages':'ALL STARS UNLOCKED!';
+}
+
+function sendMessage(){
+ score++;coins+=2;
+ document.getElementById('score').textContent=score;
+ document.getElementById('coins').textContent=coins;
+ getStars();
+
+ const chat=document.getElementById('chat');
+ let line=document.createElement('div');
+ line.className='msg mine';
+ line.textContent='Finlay: '+reactions[(score-1)%reactions.length];
+ chat.appendChild(line);
+
+ if(score%5===0){
+  let reply=document.createElement('div');
+  reply.className='msg';
+  reply.textContent=names[(score/5-1)%names.length]+': BRO STOP SPAMMING 😂';
+  chat.appendChild(reply);
+ }
+ chat.scrollTop=chat.scrollHeight;
+}
+</script>
+</body>
+</html>
